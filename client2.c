@@ -35,9 +35,9 @@ int main(int argc,char** argv)
     char buf[16];
     snprintf(buf,sizeof(buf),"/%d",pid);
     message msg;
-    if ((queue=mq_open(buf,O_RDONLY | O_CREAT | O_EXCL,0666,&attr))==(mqd_t)-1)
+    if ((queue=TEMP_FAILURE_RETRY(mq_open(buf,O_RDONLY | O_CREAT | O_EXCL,0666,&attr)))==(mqd_t)-1)
         ERR("mq_open");
-    if ((server_queue=mq_open(server_name,O_WRONLY))==(mqd_t)-1)
+    if ((server_queue=TEMP_FAILURE_RETRY(mq_open(server_name,O_WRONLY)))==(mqd_t)-1)
         ERR("mq_open");
     while (1)
     {
@@ -51,15 +51,18 @@ int main(int argc,char** argv)
         }
     msg.number=atoi(line);
     msg.pid=pid;
-    if (mq_send(server_queue,(char*)&msg,sizeof(message),10)==-1)
+    if (TEMP_FAILURE_RETRY(mq_send(server_queue,(char*)&msg,sizeof(message),10))==-1)
         ERR("mq_send");
     int result;
     struct timespec t;
     clock_gettime(CLOCK_REALTIME,&t);
     struct timespec tt;
     tt.tv_sec=t.tv_sec;
-    tt.tv_nsec=t.tv_nsec+2E8;
-    if (mq_timedreceive(queue,(char*)&result,sizeof(message),NULL,&tt)==-1)
+    if (t.tv_nsec<8E8)
+        tt.tv_nsec=t.tv_nsec+2E8;
+    else
+       tt.tv_sec++;
+    if (TEMP_FAILURE_RETRY(mq_timedreceive(queue,(char*)&result,sizeof(message),NULL,&tt))==-1)
         ERR("mq_receive");
     printf("%d \n",result);
     }

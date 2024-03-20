@@ -38,8 +38,6 @@ void sethandler(void (*f)(int, siginfo_t *, void *), int sigNo)
         perror("sigaction");
 }
 void handler(int sig, siginfo_t *info, void *context) {
-
-    sleep(10);
      threadargs* args=(threadargs*) info->si_value.sival_ptr;
      mqd_t* queue;
     int divisor;
@@ -54,7 +52,7 @@ void handler(int sig, siginfo_t *info, void *context) {
     message msg;
     if (mq_notify(*queue, &not ) < 0)
        perror("mq_notify");
-    if (mq_receive(*queue, (char *)&msg, sizeof(message), NULL) < 1)
+    if (TEMP_FAILURE_RETRY(mq_receive(*queue, (char *)&msg, sizeof(message), NULL)) < 1)
         perror("mq_receive");
     result = msg.number % divisor;
     char buf[16];
@@ -84,15 +82,15 @@ void function(union sigval sv)
     message message;
     if (mq_notify(*queue, &not ) < 0)
        perror("mq_notify");
-    if (mq_receive(*queue, (char *)&message, sizeof(message), NULL) < 1)
+    if (TEMP_FAILURE_RETRY(mq_receive(*queue, (char *)&message, sizeof(message), NULL)) < 1)
         perror("mq_receive");
     result = message.number % divisor;
     char buf[16];
     snprintf(buf,sizeof(buf),"/%d",message.pid);
     mqd_t client;
-    if ( (client=mq_open(buf,O_WRONLY))==-1)
+    if ( (client=TEMP_FAILURE_RETRY(mq_open(buf,O_WRONLY))==-1))
         ERR("mq_open");
-    if (mq_send(client,(char*)&result,sizeof(result),10)==-1)
+    if (TEMP_FAILURE_RETRY(mq_send(client,(char*)&result,sizeof(result),10))==-1)
         ERR("mq_send");
     return;
 }
@@ -123,12 +121,12 @@ int main(int argc,char** argv)
         divisors[i]=atoi(argv[i+1]);
         snprintf(queue_names[i],sizeof(queue_names[i]),"/%d_%d",pid,divisors[i]);
         printf("%s \n",queue_names[i]);
-        if ((queue_descriptors[i]=mq_open(queue_names[i],O_RDONLY | O_CREAT | O_EXCL , 0666,&attr))==(mqd_t)-1)
+        if ((queue_descriptors[i]=TEMP_FAILURE_RETRY(mq_open(queue_names[i],O_RDONLY | O_CREAT | O_EXCL , 0666,&attr)))==(mqd_t)-1)
             ERR("mq_open");
         args[i].divisor=divisors[i];
         args[i].queue=&queue_descriptors[i];
         not.sigev_value.sival_ptr=&args[i];
-         if (mq_notify(queue_descriptors[i], &not) < 0) 
+         if (mq_notify(queue_descriptors[i], &not) < 0)
          {
             perror("mq_notify()");
             exit(1);
@@ -150,6 +148,7 @@ int main(int argc,char** argv)
         mq_close(queue_descriptors[i]);
         mq_unlink(queue_names[i]);
     }
+
     return EXIT_SUCCESS;
 
 }

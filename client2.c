@@ -34,7 +34,7 @@ int main(int argc,char** argv)
     mqd_t server_queue,queue;
     char buf[16];
     snprintf(buf,sizeof(buf),"/%d",pid);
-    message message;
+    message msg;
     if ((queue=mq_open(buf,O_RDONLY | O_CREAT | O_EXCL,0666,&attr))==(mqd_t)-1)
         ERR("mq_open");
     if ((server_queue=mq_open(server_name,O_WRONLY))==(mqd_t)-1)
@@ -43,19 +43,23 @@ int main(int argc,char** argv)
     {
     ssize_t read = getline(&line, &len, stdin);
     if (read == -1) {
-            if (feof(stdin)) { // End of input stream
-                //free(line);
+            if (feof(stdin)) { 
                 break;
             } else {
                 ERR("getline");
             }
         }
-    message.number=atoi(line);
-    message.pid=pid;
-    if (mq_send(server_queue,(char*)&message,sizeof(message),10)==-1)
+    msg.number=atoi(line);
+    msg.pid=pid;
+    if (mq_send(server_queue,(char*)&msg,sizeof(message),10)==-1)
         ERR("mq_send");
     int result;
-    if (mq_receive(queue,(char*)&result,sizeof(message),NULL)==-1)
+    struct timespec t;
+    clock_gettime(CLOCK_REALTIME,&t);
+    struct timespec tt;
+    tt.tv_sec=t.tv_sec;
+    tt.tv_nsec=t.tv_nsec+2E8;
+    if (mq_timedreceive(queue,(char*)&result,sizeof(message),NULL,&tt)==-1)
         ERR("mq_receive");
     printf("%d \n",result);
     }
